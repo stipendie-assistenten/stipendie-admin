@@ -6,7 +6,8 @@ import {
   User, 
   Settings,
   Menu,
-  X 
+  X,
+  PlayCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -23,6 +24,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const navItems = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/queue', label: 'Queue', icon: List },
+    { path: '/jobs', label: 'Jobs', icon: PlayCircle },
     { path: '/profile', label: 'Profile', icon: User },
     { path: '/settings', label: 'Settings', icon: Settings },
   ];

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -17,6 +18,9 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 const LoginPage: React.FC = () => {
   const { login } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const redirectTo = (location.state as any)?.from?.pathname || '/';
   const {
     register,
     handleSubmit,
@@ -34,7 +38,9 @@ const LoginPage: React.FC = () => {
     if (!success) {
       // Handle login error
       alert('Invalid credentials. Please try again.');
+      return;
     }
+    navigate(redirectTo, { replace: true });
   };
 
   return (

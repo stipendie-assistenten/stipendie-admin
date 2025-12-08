@@ -8,6 +8,7 @@ import LoginPage from '@/pages/LoginPage';
 import DashboardPage from '@/pages/DashboardPage';
 import QueuePage from '@/pages/QueuePage';
 import ReviewPage from '@/pages/ReviewPage';
+import JobsPage from '@/pages/JobsPage';
 
 const App: React.FC = () => {
   return (
@@ -32,6 +33,16 @@ const App: React.FC = () => {
                 <ProtectedRoute>
                   <AdminLayout>
                     <QueuePage />
+                  </AdminLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/jobs"
+              element={
+                <ProtectedRoute>
+                  <AdminLayout>
+                    <JobsPage />
                   </AdminLayout>
                 </ProtectedRoute>
               }

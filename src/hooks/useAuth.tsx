@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { jwtDecode } from 'jwt-decode'; // You might need to install this: npm install jwt-decode
+import { jwtDecode } from 'jwt-decode';
+import { backendApi } from '@/lib/api';
 
 interface User {
   id: string;
@@ -33,21 +34,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    // Check if user is logged in on app start by checking token
     const token = localStorage.getItem('adminToken');
     if (token) {
       try {
         const decoded = jwtDecode(token) as any;
-        // Check if token is expired
         if (decoded.exp * 1000 > Date.now()) {
           setUser({
-            id: decoded.userId || 'admin',
-            email: decoded.email || 'admin@stipendie.labb.site',
+            id: decoded.sub || 'admin',
+            email: decoded.email || '',
             name: decoded.name || 'Admin User',
             role: decoded.role || 'admin'
           });
         } else {
-          // Token is expired, remove it
           localStorage.removeItem('adminToken');
         }
       } catch (error) {
@@ -58,31 +56,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    // In a real implementation, this would call your backend API
-    // For now, we'll simulate a successful login
     try {
-      // This is a mock implementation - replace with real API call
-      // const response = await fetch('/api/auth/login', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ email, password })
-      // });
-      //
-      // const data = await response.json();
-      // if (response.ok) {
-      //   localStorage.setItem('adminToken', data.token);
-      //   setUser(data.user);
-      //   return true;
-      // }
+      const response = await backendApi.post('/auth/login', { email, password });
+      const { access_token, user: userData } = response.data;
       
-      // Mock successful login
-      const mockToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhZG1pbiIsImVtYWlsIjoiYWRtaW5Ac3RpcGVuZGllLmxhYmIuc2l0ZSIsIm5hbWUiOiJBZG1pbiBVc2VyIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjE3NjcyMjU0OTl9.abcdef';
-      localStorage.setItem('adminToken', mockToken);
+      localStorage.setItem('adminToken', access_token);
       setUser({
-        id: 'admin',
-        email: email,
-        name: 'Admin User',
-        role: 'admin'
+        id: userData.id,
+        email: userData.email,
+        name: userData.name,
+        role: userData.role
       });
       return true;
     } catch (error) {
