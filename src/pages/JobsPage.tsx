@@ -34,6 +34,26 @@ type FoundationStats = {
   embedding_eta_seconds: number;
 };
 
+type EnrichmentStatus = {
+  total: number;
+  counts: Record<string, number>;
+  completed_percentage: number;
+  failed_count: number;
+  remaining: number;
+};
+
+type EnrichmentDetail = {
+  id: number;
+  name: string;
+  status: string;
+  last_run: string | null;
+  error: string | null;
+  website_url: string | null;
+  application_deadline: string | null;
+  application_start: string | null;
+  application_method: string | null;
+};
+
 const actions: {
   key: ActionKey;
   label: string;
@@ -104,6 +124,17 @@ const JobsPage: React.FC = () => {
   const [testPrompt, setTestPrompt] = useState('');
   const [foundationStats, setFoundationStats] = useState<FoundationStats | null>(null);
 
+  // Enrichment state
+  const [enrichmentStatus, setEnrichmentStatus] = useState<EnrichmentStatus | null>(null);
+  const [enrichmentDetails, setEnrichmentDetails] = useState<EnrichmentDetail[]>([]);
+  const [enrichmentLoading, setEnrichmentLoading] = useState(false);
+  const [enrichmentMessage, setEnrichmentMessage] = useState('');
+  const [enrichFoundationId, setEnrichFoundationId] = useState('');
+  const [singleEnrichResult, setSingleEnrichResult] = useState<any>(null);
+  const [showEnrichDetails, setShowEnrichDetails] = useState(false);
+  const [enrichPrompt, setEnrichPrompt] = useState('');
+  const [forceSearch, setForceSearch] = useState(false);
+
   // Load translation defaults and stats on mount
   const loadStats = async () => {
     try {
@@ -126,7 +157,89 @@ const JobsPage: React.FC = () => {
     };
     loadDefaults();
     loadStats();
+    loadEnrichmentStatus();
   }, []);
+
+  // Enrichment handlers
+  const loadEnrichmentStatus = async () => {
+    try {
+      const response = await backendApi.get('/admin/enrich/status');
+      setEnrichmentStatus(response.data);
+    } catch (e) {
+      console.error('Failed to load enrichment status', e);
+    }
+  };
+
+  const loadEnrichmentDetails = async () => {
+    try {
+      const response = await backendApi.get('/admin/enrich/details?limit=30');
+      setEnrichmentDetails(response.data.foundations || []);
+      setShowEnrichDetails(true);
+    } catch (e) {
+      console.error('Failed to load enrichment details', e);
+    }
+  };
+
+  const triggerEnrichment = async () => {
+    setEnrichmentLoading(true);
+    setEnrichmentMessage('');
+    try {
+      const response = await backendApi.post('/admin/enrich/start');
+      setEnrichmentMessage(`Startad! ${response.data.enqueued} stiftelser i kö.`);
+      setTimeout(loadEnrichmentStatus, 2000);
+    } catch (e) {
+      setEnrichmentMessage('Fel vid start av berikning');
+    } finally {
+      setEnrichmentLoading(false);
+    }
+  };
+
+  const resetEnrichment = async () => {
+    if (!window.confirm('Återställ statusen för alla stiftelser? Detta kan inte ångras.')) return;
+    try {
+      await backendApi.post('/admin/enrich/reset');
+      setEnrichmentMessage('Status återställd!');
+      loadEnrichmentStatus();
+    } catch (e) {
+      setEnrichmentMessage('Fel vid återställning');
+    }
+  };
+
+  const testSingleEnrichment = async () => {
+    if (!enrichFoundationId.trim()) {
+      setSingleEnrichResult({ error: 'Ange ett stiftelse-ID' });
+      return;
+    }
+    setEnrichmentLoading(true);
+    setSingleEnrichResult(null);
+    try {
+      // Build URL with optional parameters
+      const params = new URLSearchParams();
+      if (enrichPrompt.trim()) {
+        params.append('custom_prompt', enrichPrompt.trim());
+      }
+      if (forceSearch) {
+        params.append('force_search', 'true');
+      }
+      const url = `/admin/enrich/foundation/${enrichFoundationId}${params.toString() ? '?' + params.toString() : ''}`;
+      const response = await backendApi.post(url, {}, { timeout: 120000 });
+      setSingleEnrichResult(response.data);
+      loadEnrichmentStatus();
+    } catch (e: any) {
+      setSingleEnrichResult({ error: e.response?.data?.detail || e.message || 'Fel' });
+    } finally {
+      setEnrichmentLoading(false);
+    }
+  };
+
+  const loadEnrichmentDefaults = async () => {
+    try {
+      const response = await backendApi.get('/admin/enrich/defaults');
+      setEnrichPrompt(response.data.prompt_template || '');
+    } catch (e) {
+      console.error('Failed to load enrichment defaults', e);
+    }
+  };
 
   const formatTimeRemaining = (seconds: number | null | undefined): string => {
     if (seconds === null || seconds === undefined || seconds <= 0) return '';
@@ -466,6 +579,233 @@ const JobsPage: React.FC = () => {
             <p className="text-xs text-muted-foreground">
               OBS: Kör "Översätt Alla Ändamål" först om stiftelserna saknar översättningar.
             </p>
+          </CardContent>
+        </Card>
+
+        {/* Enrichment Status Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Berikning (Enrichment Pipeline)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {/* Status Display */}
+            {enrichmentStatus && (
+              <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
+                <div className="flex justify-between text-sm">
+                  <span>Klara</span>
+                  <span className="text-green-600 font-medium">{enrichmentStatus.counts.COMPLETED || 0} ({enrichmentStatus.completed_percentage}%)</span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-2">
+                  <div
+                    className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${enrichmentStatus.completed_percentage}%` }}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground pt-2">
+                  <div>Obearbetade: {enrichmentStatus.counts.UNPROCESSED || 0}</div>
+                  <div>Väntande: {enrichmentStatus.counts.PENDING || 0}</div>
+                  <div>Pågående: {enrichmentStatus.counts.PROCESSING || 0}</div>
+                  <div className="text-red-500">Misslyckade: {enrichmentStatus.failed_count}</div>
+                </div>
+              </div>
+            )}
+
+            <p className="text-sm text-muted-foreground">
+              Söker webbplats, skrapar innehåll, och extraherar ansökningsinformation via LLM.
+            </p>
+
+            <div className="flex gap-2 flex-wrap">
+              <Button onClick={triggerEnrichment} disabled={enrichmentLoading}>
+                {enrichmentLoading ? 'Kör...' : 'Starta Berikning'}
+              </Button>
+              <Button variant="outline" onClick={loadEnrichmentDetails}>
+                Visa Detaljer
+              </Button>
+              <Button variant="outline" onClick={loadEnrichmentStatus}>
+                Uppdatera Status
+              </Button>
+              <Button variant="destructive" onClick={resetEnrichment}>
+                Återställ
+              </Button>
+            </div>
+
+            {enrichmentMessage && (
+              <p className="text-sm text-green-600">{enrichmentMessage}</p>
+            )}
+
+            {/* Details Table */}
+            {showEnrichDetails && enrichmentDetails.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs border rounded">
+                  <thead className="bg-muted">
+                    <tr>
+                      <th className="p-2 text-left">ID</th>
+                      <th className="p-2 text-left">Namn</th>
+                      <th className="p-2 text-left">Status</th>
+                      <th className="p-2 text-left">Deadline</th>
+                      <th className="p-2 text-left">Metod</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {enrichmentDetails.map(f => (
+                      <tr key={f.id} className="border-t">
+                        <td className="p-2">{f.id}</td>
+                        <td className="p-2 max-w-[150px] truncate">{f.name}</td>
+                        <td className={`p-2 font-medium ${f.status === 'COMPLETED' ? 'text-green-600' :
+                          f.status === 'FAILED' ? 'text-red-500' :
+                            f.status === 'PROCESSING' ? 'text-yellow-600' : 'text-gray-500'
+                          }`}>{f.status}</td>
+                        <td className="p-2">{f.application_deadline || '-'}</td>
+                        <td className="p-2">{f.application_method || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Test Single Enrichment Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Testa Berikning</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Testa berikningspipelinen på en enskild stiftelse för att se steg-för-steg-resultat.
+            </p>
+
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-xs text-muted-foreground">LLM Prompt (använd {'{content}'} som platsmarkering)</label>
+                <Button variant="ghost" size="sm" onClick={loadEnrichmentDefaults} className="text-xs h-6">
+                  Ladda standard
+                </Button>
+              </div>
+              <textarea
+                placeholder="Anpassad prompt..."
+                value={enrichPrompt}
+                onChange={(e) => setEnrichPrompt(e.target.value)}
+                className="w-full h-32 p-2 text-xs border rounded resize-y font-mono"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 mb-2">
+              <input
+                type="checkbox"
+                id="forceSearch"
+                checked={forceSearch}
+                onChange={(e) => setForceSearch(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <label htmlFor="forceSearch" className="text-sm">
+                Forcera ny sökning (ignorera sparad URL)
+              </label>
+            </div>
+
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                placeholder="Stiftelse-ID"
+                value={enrichFoundationId}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEnrichFoundationId(e.target.value)}
+                className="w-32"
+              />
+              <Button onClick={testSingleEnrichment} disabled={enrichmentLoading}>
+                {enrichmentLoading ? 'Kör...' : 'Testa'}
+              </Button>
+            </div>
+
+            {singleEnrichResult && !singleEnrichResult.error && (
+              <div className="space-y-2">
+                <p className="font-medium">{singleEnrichResult.name}</p>
+                <div className="text-xs space-y-1">
+                  {singleEnrichResult.steps?.map((s: any, i: number) => (
+                    <div key={i} className={`p-2 rounded ${s.status === 'success' ? 'bg-green-50 dark:bg-green-950' :
+                      s.status === 'failed' ? 'bg-red-50 dark:bg-red-950' : 'bg-muted'
+                      }`}>
+                      <span className="font-medium">{s.step}</span>: {s.status}
+                      {s.url && <span className="ml-2 text-blue-600 break-all">{s.url}</span>}
+                      {s.message && <span className="ml-2 text-muted-foreground">{s.message}</span>}
+                    </div>
+                  ))}
+                </div>
+                {singleEnrichResult.enriched_data && (
+                  <div className="p-3 bg-muted rounded text-xs space-y-3">
+                    {singleEnrichResult.consensus && (
+                      <div className="text-muted-foreground mb-2">
+                        Konsensus från {singleEnrichResult.consensus.sites_used} sajter
+                      </div>
+                    )}
+
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <strong>Deadline:</strong>
+                        {singleEnrichResult.enriched_data.application_deadline?.value || 'N/A'}
+                        {singleEnrichResult.enriched_data.application_deadline?.votes > 0 && (
+                          <span className={`px-1.5 py-0.5 rounded text-xs ${singleEnrichResult.enriched_data.application_deadline.votes >= 2
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                            {singleEnrichResult.enriched_data.application_deadline.votes} röst(er)
+                          </span>
+                        )}
+                      </div>
+                      {singleEnrichResult.enriched_data.application_deadline?.sources?.map((src: string, i: number) => (
+                        <a key={i} href={src} target="_blank" rel="noopener noreferrer" className="block text-blue-600 hover:underline text-xs ml-4">
+                          ↳ {new URL(src).hostname}
+                        </a>
+                      ))}
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <strong>Start:</strong>
+                        {singleEnrichResult.enriched_data.application_start?.value || 'N/A'}
+                        {singleEnrichResult.enriched_data.application_start?.votes > 0 && (
+                          <span className={`px-1.5 py-0.5 rounded text-xs ${singleEnrichResult.enriched_data.application_start.votes >= 2
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                            {singleEnrichResult.enriched_data.application_start.votes} röst(er)
+                          </span>
+                        )}
+                      </div>
+                      {singleEnrichResult.enriched_data.application_start?.sources?.map((src: string, i: number) => (
+                        <a key={i} href={src} target="_blank" rel="noopener noreferrer" className="block text-blue-600 hover:underline text-xs ml-4">
+                          ↳ {new URL(src).hostname}
+                        </a>
+                      ))}
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <strong>Metod:</strong>
+                        {singleEnrichResult.enriched_data.application_method?.value || 'N/A'}
+                        {singleEnrichResult.enriched_data.application_method?.votes > 0 && (
+                          <span className={`px-1.5 py-0.5 rounded text-xs ${singleEnrichResult.enriched_data.application_method.votes >= 2
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                            {singleEnrichResult.enriched_data.application_method.votes} röst(er)
+                          </span>
+                        )}
+                      </div>
+                      {singleEnrichResult.enriched_data.application_method?.sources?.map((src: string, i: number) => (
+                        <a key={i} href={src} target="_blank" rel="noopener noreferrer" className="block text-blue-600 hover:underline text-xs ml-4">
+                          ↳ {new URL(src).hostname}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {singleEnrichResult?.error && (
+              <p className="text-sm text-destructive">{singleEnrichResult.error}</p>
+            )}
           </CardContent>
         </Card>
       </div>
