@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { backendApi } from '@/lib/api';
 
-type ActionKey = 'foundationSync' | 'grantSync' | 'resetCategories' | 'clearDatabase' | 'bulkTranslation' | 'singleTranslation';
+type ActionKey = 'grantSync' | 'resetCategories' | 'clearDatabase' | 'bulkTranslation' | 'singleTranslation';
 
 type ActionState = {
   loading: boolean;
@@ -13,6 +13,16 @@ type ActionState = {
 };
 
 type BulkTranslationState = {
+  loading: boolean;
+  message?: string;
+  error?: string;
+  progress?: number;
+  completed?: number;
+  total?: number;
+  estimatedSecondsRemaining?: number | null;
+};
+
+type SyncFoundationsState = {
   loading: boolean;
   message?: string;
   error?: string;
@@ -62,12 +72,6 @@ const actions: {
   confirmText?: string;
 }[] = [
     {
-      key: 'foundationSync',
-      label: 'Sync Foundations',
-      description: 'Triggers manual synchronization of foundation data.',
-      endpoint: '/admin/trigger-foundation-sync',
-    },
-    {
       key: 'grantSync',
       label: 'Sync Grants',
       description: 'Triggers grant synchronization (placeholder if not implemented).',
@@ -88,25 +92,9 @@ const actions: {
     },
   ];
 
-// Helper function to format seconds into human-readable time
-const formatTimeRemaining = (seconds: number): string => {
-  if (seconds <= 0) return '0 min';
-
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-
-  const parts: string[] = [];
-  if (days > 0) parts.push(`${days}d`);
-  if (hours > 0) parts.push(`${hours}h`);
-  if (minutes > 0 || parts.length === 0) parts.push(`${minutes}m`);
-
-  return parts.join(' ');
-};
 
 const JobsPage: React.FC = () => {
   const [state, setState] = useState<Record<ActionKey, ActionState>>({
-    foundationSync: { loading: false },
     grantSync: { loading: false },
     resetCategories: { loading: false },
     clearDatabase: { loading: false },
@@ -115,6 +103,10 @@ const JobsPage: React.FC = () => {
   });
 
   const [bulkTranslationState, setBulkTranslationState] = useState<BulkTranslationState>({
+    loading: false,
+  });
+
+  const [syncState, setSyncState] = useState<SyncFoundationsState>({
     loading: false,
   });
 
@@ -250,6 +242,59 @@ const JobsPage: React.FC = () => {
     return `~${hours}h ${mins}min kvar`;
   };
 
+  const triggerFoundationSync = async () => {
+    setSyncState({ loading: true, error: undefined });
+    try {
+      const response = await backendApi.post('/admin/trigger-foundation-sync');
+      const { task_id } = response.data;
+
+      // Start polling for status
+      const pollStatus = async () => {
+        try {
+          const statusResponse = await backendApi.get(`/admin/sync-status/${task_id}`);
+          const statusData = statusResponse.data;
+
+          if (statusData.status === 'completed' || statusData.status === 'failed') {
+            setSyncState({
+              loading: false,
+              progress: 100,
+              completed: statusData.completed || 0,
+              total: statusData.total || 0,
+              message: statusData.status === 'completed'
+                ? `Färdig! ${statusData.result?.created ?? 0} nya, ${statusData.result?.updated ?? 0} uppdaterade, ${statusData.result?.failed ?? 0} misslyckades (totalt: ${statusData.result?.total ?? 0}).`
+                : `Fel: ${statusData.error}`,
+              error: statusData.status === 'failed' ? statusData.error : undefined,
+              estimatedSecondsRemaining: null,
+            });
+            loadStats();
+          } else {
+            setSyncState({
+              loading: true,
+              progress: statusData.progress || 0,
+              completed: statusData.completed || 0,
+              total: statusData.total || 0,
+              estimatedSecondsRemaining: statusData.estimated_remaining_seconds,
+            });
+            setTimeout(pollStatus, 2000);
+          }
+        } catch {
+          setSyncState({
+            loading: false,
+            error: 'Kunde inte hämta status',
+          });
+        }
+      };
+
+      pollStatus();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Okänt fel';
+      setSyncState({
+        loading: false,
+        error: message,
+      });
+    }
+  };
+
   const trigger = async (key: ActionKey, endpoint: string, confirmText?: string) => {
     if (confirmText && !window.confirm(confirmText)) return;
 
@@ -373,6 +418,47 @@ const JobsPage: React.FC = () => {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
+        {/* Sync Foundations Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Sync Foundations</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Triggers manual synchronization of foundation data from the external API.
+            </p>
+            <Button
+              onClick={triggerFoundationSync}
+              disabled={syncState.loading}
+            >
+              {syncState.loading ? 'Synkar...' : 'Starta Sync'}
+            </Button>
+
+            {/* Progress Bar */}
+            {syncState.loading && syncState.total && syncState.total > 0 && (
+              <div className="space-y-2">
+                <div className="w-full bg-muted rounded-full h-3">
+                  <div
+                    className="bg-primary h-3 rounded-full transition-all duration-300"
+                    style={{ width: `${syncState.progress || 0}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>{syncState.completed || 0} / {syncState.total} ({(syncState.progress || 0).toFixed(1)}%)</span>
+                  <span>{formatTimeRemaining(syncState.estimatedSecondsRemaining)}</span>
+                </div>
+              </div>
+            )}
+
+            {syncState.message && (
+              <p className="text-sm text-green-600 dark:text-green-400">{syncState.message}</p>
+            )}
+            {syncState.error && (
+              <p className="text-sm text-destructive">{syncState.error}</p>
+            )}
+          </CardContent>
+        </Card>
+
         {actions.map((action) => {
           const actionState = state[action.key];
           return (
