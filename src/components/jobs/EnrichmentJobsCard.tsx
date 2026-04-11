@@ -95,6 +95,7 @@ export const EnrichmentJobsCard: React.FC = () => {
     if (!foundationId) return;
     setLoading(true);
     setSingleResult(null);
+    setMessage('');
     try {
       const response = await backendApi.post(`/admin/enrich/foundation/${foundationId}`, {
         force_search: forceSearch,
@@ -103,10 +104,21 @@ export const EnrichmentJobsCard: React.FC = () => {
         extraction_sys_prompt: prompts.extraction_system_prompt,
         extraction_usr_prompt: prompts.extraction_user_prompt
       });
-      setSingleResult(response.data);
+      
+      if (response.data.status === 'enqueued') {
+        setMessage(`Jobb köat (ID: ${response.data.job_id.substring(0, 8)}...). Se status nedan.`);
+        // Periodically refresh status to show it moving to PROCESSING/COMPLETED
+        const interval = setInterval(async () => {
+          await loadStatus();
+        }, 3000);
+        setTimeout(() => clearInterval(interval), 30000);
+      } else {
+        setSingleResult(response.data);
+      }
       loadStatus();
     } catch (e: any) {
       setSingleResult({ error: e.message });
+      setMessage('Fel vid test-körning');
     } finally {
       setLoading(false);
     }

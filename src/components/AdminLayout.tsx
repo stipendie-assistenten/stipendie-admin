@@ -8,6 +8,7 @@ import {
   Menu,
   X,
   PlayCircle,
+  BarChart2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -25,6 +26,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/queue', label: 'Queue', icon: List },
     { path: '/jobs', label: 'Jobs', icon: PlayCircle },
+    { path: '/enrichment-results', label: 'Berikningsresultat', icon: BarChart2 },
     { path: '/profile', label: 'Profile', icon: User },
     { path: '/settings', label: 'Settings', icon: Settings },
   ];
