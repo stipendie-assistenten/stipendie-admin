@@ -1,7 +1,6 @@
 import axios from 'axios';
 
-const backendBase = (import.meta.env.VITE_BACKEND_URL || '/api').replace(/\/$/, '');
-const engineBase = (import.meta.env.VITE_ENGINE_URL || '/api/v1').replace(/\/$/, '');
+const backendBase = (import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
 function createClient(baseURL: string) {
   const client = axios.create({
@@ -40,4 +39,3 @@ function createClient(baseURL: string) {
 }
 
 export const backendApi = createClient(backendBase);
-export const engineApi = createClient(engineBase);
