@@ -50,3 +50,17 @@ export type ActiveJob = {
 } | null;
 
 export type ActiveJobsSummary = Record<string, ActiveJob>;
+
+export type FoundationSearchResult = {
+  id: number;
+  name: string;
+  orgnr: string | null;
+};
+
+export type EnrichmentDefaults = {
+  validation_system_prompt: string;
+  validation_user_prompt: string;
+  extraction_system_prompt: string;
+  extraction_user_prompt: string;
+  model: string;
+};
