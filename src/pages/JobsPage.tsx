@@ -804,86 +804,66 @@ const JobsPage: React.FC = () => {
             </div>
 
             {singleEnrichResult && !singleEnrichResult.error && (
-              <div className="space-y-2">
-                <p className="font-medium">{singleEnrichResult.name}</p>
-                <div className="text-xs space-y-1">
-                  {singleEnrichResult.steps?.map((s: any, i: number) => (
-                    <div key={i} className={`p-2 rounded ${s.status === 'success' ? 'bg-green-50 dark:bg-green-950' :
-                      s.status === 'failed' ? 'bg-red-50 dark:bg-red-950' : 'bg-muted'
-                      }`}>
-                      <span className="font-medium">{s.step}</span>: {s.status}
-                      {s.url && <span className="ml-2 text-blue-600 break-all">{s.url}</span>}
-                      {s.message && <span className="ml-2 text-muted-foreground">{s.message}</span>}
-                    </div>
-                  ))}
-                </div>
-                {singleEnrichResult.enriched_data && (
-                  <div className="p-3 bg-muted rounded text-xs space-y-3">
-                    {singleEnrichResult.consensus && (
-                      <div className="text-muted-foreground mb-2">
-                        Konsensus från {singleEnrichResult.consensus.sites_used} sajter
+              <div className="space-y-4">
+                <p className="font-medium">{singleEnrichResult.trace?.name || 'Test Result'}</p>
+                
+                {singleEnrichResult.trace?.discovery?.length > 0 && (
+                  <div className="bg-muted p-3 rounded text-xs space-y-1">
+                    <strong className="block mb-2">1. Discovery (DuckDuckGo)</strong>
+                    {singleEnrichResult.trace.discovery.map((d: any, i: number) => (
+                      <div key={i} className="flex justify-between border-b pb-1">
+                        <span className="truncate flex-1">{d.title}</span>
+                        <a href={d.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 truncate max-w-[200px] ml-2">{d.url}</a>
                       </div>
-                    )}
+                    ))}
+                  </div>
+                )}
 
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <strong>Deadline:</strong>
-                        {singleEnrichResult.enriched_data.application_deadline?.value || 'N/A'}
-                        {singleEnrichResult.enriched_data.application_deadline?.votes > 0 && (
-                          <span className={`px-1.5 py-0.5 rounded text-xs ${singleEnrichResult.enriched_data.application_deadline.votes >= 2
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                            }`}>
-                            {singleEnrichResult.enriched_data.application_deadline.votes} röst(er)
-                          </span>
-                        )}
+                {singleEnrichResult.trace?.validation?.length > 0 && (
+                  <div className="bg-muted p-3 rounded text-xs space-y-1">
+                    <strong className="block mb-2">2. Validation (LLM)</strong>
+                    {singleEnrichResult.trace.validation.map((v: any, i: number) => (
+                      <div key={i} className="flex justify-between items-center border-b pb-1">
+                        <span className="truncate flex-1">{v.url}</span>
+                        <div className="flex gap-2">
+                          <span className={v.is_match ? 'text-green-600 font-bold' : 'text-red-500'}>{v.is_match ? 'Match' : 'No Match'}</span>
+                          <span className="bg-gray-200 px-1 rounded">{v.confidence} conf</span>
+                        </div>
                       </div>
-                      {singleEnrichResult.enriched_data.application_deadline?.sources?.map((src: string, i: number) => (
-                        <a key={i} href={src} target="_blank" rel="noopener noreferrer" className="block text-blue-600 hover:underline text-xs ml-4">
-                          ↳ {new URL(src).hostname}
-                        </a>
-                      ))}
-                    </div>
+                    ))}
+                  </div>
+                )}
 
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <strong>Start:</strong>
-                        {singleEnrichResult.enriched_data.application_start?.value || 'N/A'}
-                        {singleEnrichResult.enriched_data.application_start?.votes > 0 && (
-                          <span className={`px-1.5 py-0.5 rounded text-xs ${singleEnrichResult.enriched_data.application_start.votes >= 2
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                            }`}>
-                            {singleEnrichResult.enriched_data.application_start.votes} röst(er)
-                          </span>
-                        )}
+                {singleEnrichResult.trace?.crawler?.length > 0 && (
+                  <div className="bg-muted p-3 rounded text-xs space-y-1">
+                    <strong className="block mb-2">3. Crawler (Playwright)</strong>
+                    {singleEnrichResult.trace.crawler.map((c: any, i: number) => (
+                      <div key={i} className="flex justify-between border-b pb-1">
+                        <span className="truncate flex-1 text-blue-600">{c.url}</span>
+                        <div className="flex gap-2">
+                          <span className="bg-blue-100 text-blue-800 px-1 rounded">{c.type}</span>
+                          <span className="text-gray-500">{Math.round(c.size / 1024)}kb</span>
+                        </div>
                       </div>
-                      {singleEnrichResult.enriched_data.application_start?.sources?.map((src: string, i: number) => (
-                        <a key={i} href={src} target="_blank" rel="noopener noreferrer" className="block text-blue-600 hover:underline text-xs ml-4">
-                          ↳ {new URL(src).hostname}
-                        </a>
-                      ))}
-                    </div>
+                    ))}
+                  </div>
+                )}
 
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <strong>Metod:</strong>
-                        {singleEnrichResult.enriched_data.application_method?.value || 'N/A'}
-                        {singleEnrichResult.enriched_data.application_method?.votes > 0 && (
-                          <span className={`px-1.5 py-0.5 rounded text-xs ${singleEnrichResult.enriched_data.application_method.votes >= 2
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                            }`}>
-                            {singleEnrichResult.enriched_data.application_method.votes} röst(er)
-                          </span>
-                        )}
-                      </div>
-                      {singleEnrichResult.enriched_data.application_method?.sources?.map((src: string, i: number) => (
-                        <a key={i} href={src} target="_blank" rel="noopener noreferrer" className="block text-blue-600 hover:underline text-xs ml-4">
-                          ↳ {new URL(src).hostname}
-                        </a>
-                      ))}
+                {singleEnrichResult.trace?.extraction && (
+                  <div className="bg-green-50 dark:bg-green-950/20 p-3 rounded text-xs space-y-2 border border-green-200 dark:border-green-800">
+                    <strong className="block text-green-800 dark:text-green-400">4. Extraction (LLM Output)</strong>
+                    <div className="grid grid-cols-1 gap-2">
+                      <div><strong className="text-muted-foreground mr-2">Link:</strong> {singleEnrichResult.trace.extraction.foundation_link || 'N/A'}</div>
+                      <div><strong className="text-muted-foreground mr-2">Deadline:</strong> {singleEnrichResult.trace.extraction.application_deadline || 'N/A'}</div>
+                      <div><strong className="text-muted-foreground mr-2">Start:</strong> {singleEnrichResult.trace.extraction.application_open || 'N/A'}</div>
+                      <div className="line-clamp-3"><strong className="text-muted-foreground mr-2">Method:</strong> {singleEnrichResult.trace.extraction.how_to_apply || 'N/A'}</div>
                     </div>
+                  </div>
+                )}
+                
+                {singleEnrichResult.status === 'error' && (
+                  <div className="bg-red-50 text-red-600 p-3 rounded text-xs">
+                    Pipeline interrupted: {singleEnrichResult.message}
                   </div>
                 )}
               </div>
